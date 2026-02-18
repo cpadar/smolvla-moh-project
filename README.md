@@ -119,3 +119,6 @@ HF_TOKEN=your_huggingface_token
 WANDB_API_KEY=your_wandb_key
 MS_ASSET_DIR=/path/to/maniskill/data
 ```
+
+## Known Dependency Conflicts
+ManiSkill3 requires gymnasium 0.29.1 but LeRobot installs 1.2.3, and that this is handled in the Dockerfile.
