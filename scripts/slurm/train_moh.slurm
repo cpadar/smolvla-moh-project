@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
-#SBATCH --partition=gpu
+#SBATCH --partition=public
 
 set -a
 source .env
