@@ -40,85 +40,143 @@ smolvla-moh-project/
 ## Quickstart
 
 ### Prerequisites
-
 - Git
-- Docker (for GPU teammates and SOL via Singularity)
-- OR: Conda (for direct local setup)
-- A Hugging Face account (for dataset and model access)
+- Homebrew (Mac) or Docker (Linux/Windows GPU machine)
+- A Hugging Face account — sign up at huggingface.co
+- A Weights & Biases account — sign up at wandb.ai
+- GitHub account — accept the repo invite from Corinne before starting
 
-### 1. Clone the repo
+---
 
+### Mac Setup (no GPU simulation — code writing and review only)
+
+**1. Clone the repo**
 ```bash
-git clone https://github.com/<your-org>/smolvla-moh-project.git
+git clone https://github.com/cpadar/smolvla-moh-project.git
 cd smolvla-moh-project
 ```
 
-### 2. Set up your environment
+**2. Install Miniconda**
+```bash
+brew install --cask miniconda
+conda init zsh
+```
+Close and reopen Terminal after this step.
 
-**Option A — Docker (recommended for GPU machines):**
+**3. Create the project environment**
+```bash
+cd ~/smolvla-moh-project
+conda env create -f environment.yml
+conda activate smolvla-moh
+```
+You should see `(smolvla-moh)` at the start of your Terminal prompt.
+
+**4. Install LeRobot and smolVLA**
+```bash
+git clone https://github.com/huggingface/lerobot.git ~/lerobot
+cd ~/lerobot
+pip install -e ".[smolvla]"
+```
+This will take several minutes. A gymnasium version conflict warning will appear at the end — this is expected and documented in Known Issues below.
+
+**5. Set up your environment variables**
+```bash
+cd ~/smolvla-moh-project
+cp .env.example .env
+open -e .env
+```
+Fill in your Hugging Face token and Weights & Biases API key, then save.
+
+**6. Authenticate with Hugging Face**
+```bash
+huggingface-cli login
+```
+Paste your Hugging Face token when prompted.
+
+Your Mac setup is complete. You can write and review code, push and pull from GitHub, but full simulation and training must run on the GPU machine or SOL.
+
+---
+
+### Linux / Windows GPU Machine Setup
+
+**1. Clone the repo**
+```bash
+git clone https://github.com/cpadar/smolvla-moh-project.git
+cd smolvla-moh-project
+```
+
+**2. Install Docker**
+Download and install Docker Desktop from docker.com. Make sure it is running before continuing.
+
+**3. Build the Docker image**
 ```bash
 docker build -t smolvla-moh -f docker/Dockerfile .
+```
+This will take 10-20 minutes the first time.
+
+**4. Set up your environment variables**
+```bash
+cp .env.example .env
+```
+Open `.env` in any text editor and fill in your Hugging Face token and Weights & Biases API key.
+
+**5. Run the container**
+```bash
 docker run --gpus all -it --rm \
   -v $(pwd):/workspace \
   -v ~/.cache/huggingface:/root/.cache/huggingface \
   smolvla-moh
 ```
 
-**Option B — Conda (Mac / local dev without full GPU sim):**
+---
+
+### SOL Setup (ASU Supercomputer)
+
+**1. Get a SOL account**
+Request access through ASU Research Computing if you don't have one already.
+Contact HPC support to confirm the GPU partition name and that Singularity/Apptainer is available.
+
+**2. Clone the repo on SOL**
 ```bash
-conda env create -f environment.yml
-conda activate smolvla-moh
-
-# Mac only: install nightly SAPIEN wheel (not yet on PyPI)
-PY_VERSION=$(python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')")
-pip install https://github.com/haosulab/SAPIEN/releases/download/nightly/sapien-3.0.0.dev20250303+291f6a77-$PY_VERSION-$PY_VERSION-macosx_12_0_universal2.whl
-
-# All platforms: install LeRobot + smolVLA extras
-git clone https://github.com/huggingface/lerobot.git /opt/lerobot
-cd /opt/lerobot && pip install -e ".[smolvla]"
-```
-> Note: On Mac, ManiSkill3 runs CPU-only simulation (GPU sim is not yet supported on macOS). Full training must happen on a CUDA GPU machine or SOL.
-
-### 3. Authenticate with Hugging Face
-
-```bash
-huggingface-cli login
+git clone https://github.com/cpadar/smolvla-moh-project.git
+cd smolvla-moh-project
 ```
 
-### 4. Download ManiSkill3 assets
-
+**3. Set up your environment variables**
 ```bash
-python -m mani_skill.utils.download_asset StackPyramid-v1
+cp .env.example .env
+nano .env
 ```
+Fill in your tokens and set `MS_ASSET_DIR` to your SOL scratch storage path.
 
-### 5. Running on SOL (ASU Supercomputer)
-
-See `scripts/slurm/` for job submission scripts. Convert the Docker image to Singularity first:
+**4. Convert Docker image to Singularity**
 ```bash
 singularity pull smolvla-moh.sif docker://your-dockerhub-username/smolvla-moh:latest
 ```
-Then submit jobs with:
+
+**5. Submit training jobs**
 ```bash
 sbatch scripts/slurm/train_base.slurm
 sbatch scripts/slurm/train_moh.slurm
 ```
 
+---
+
 ## Team Workflow
 
 1. Always pull before starting work: `git pull`
 2. Work on feature branches, not directly on `main`
-3. Training runs are tracked via Weights & Biases — check the project dashboard before launching duplicate runs
+3. Training runs are tracked via Weights & Biases — check the dashboard before launching duplicate runs
 4. Eval results go in `results/` with a timestamp and config name
 5. Never commit raw data or model checkpoints — these live on SOL and HuggingFace Hub
+6. Never commit your `.env` file — it contains private tokens
 
-## Environment Variables
+---
 
-Copy `.env.example` to `.env` and fill in your values:
-```
-HF_TOKEN=your_huggingface_token
-WANDB_API_KEY=your_wandb_key
-MS_ASSET_DIR=/path/to/maniskill/data
-```
+## Known Issues
 
-## Known Dependency Conflicts
-ManiSkill3 requires gymnasium 0.29.1 but LeRobot installs 1.2.3, and that this is handled in the Dockerfile.
+**Gymnasium version conflict**
+ManiSkill3 requires `gymnasium==0.29.1` but LeRobot installs `gymnasium==1.2.3`. A warning about this appears during LeRobot installation. This is a known conflict and is handled in the Dockerfile for GPU training. It does not affect local Mac development.
+
+**SAPIEN Mac wheel**
+SAPIEN nightly wheels for Mac rotate frequently and URLs go stale. Since Mac cannot run GPU simulation regardless, this install is skipped for Mac users. Linux machines use SAPIEN through the Docker container automatically.
