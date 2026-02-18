@@ -1,0 +1,26 @@
+# configs/train_base.yaml
+# Fine-tuning config for baseline SmolVLA on StackPyramid-v1
+
+experiment:
+  name: smolvla_base_stackpyramid
+  seed: 42
+
+policy:
+  path: lerobot/smolvla_base
+  device: cuda
+
+dataset:
+  repo_id: lerobot/maniskill_stackpyramid_v1
+  split: train
+
+training:
+  batch_size: 64
+  steps: 20000
+  save_freq: 2000
+  log_freq: 100
+  output_dir: results/checkpoints/smolvla_base
+
+wandb:
+  enable: true
+  project: smolvla-moh-stackpyramid
+  name: smolvla_base_run1
