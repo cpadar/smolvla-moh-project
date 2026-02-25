@@ -187,10 +187,11 @@ def convert(
                 # Convert HWC -> CHW for LeRobot
                 frame[lerobot_name] = Image.fromarray(img)
 
-            dataset.add_frame(frame)
+            frame["task"] = "Stack three cubes into a pyramid on the table."
+        dataset.add_frame(frame)
 
         # Save this episode with the task description
-        dataset.save_episode(task=TASK_DESCRIPTION)
+        dataset.save_episode()
 
     # Finalize — closes parquet writers, writes metadata
     print("Finalizing dataset...")

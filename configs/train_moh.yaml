@@ -14,7 +14,7 @@ policy:
     weighting: learned
 
 dataset:
-  repo_id: lerobot/maniskill_stackpyramid_v1
+  repo_id: ceshank01/stack-pyramid-v1
   split: train
 
 training:
