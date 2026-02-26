@@ -15,8 +15,8 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
-from lerobot.utils.train_utils import get_step_checkpoint_dir, save_checkpoint, update_last_checkpoint
+from lerobot.policies.smolvla.processor_smolvla import make_smolvla_pre_post_processors
+from lerobot.configs.types import FeatureType, PolicyFeature
 
 from models.smolvla_moh.moh_config import SmolVLAMoHConfig
 from models.smolvla_moh.moh_policy import SmolVLAMoHPolicy
@@ -24,24 +24,30 @@ from models.smolvla_moh.moh_policy import SmolVLAMoHPolicy
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+TASK_DESCRIPTION = "Stack three cubes into a pyramid on the table."
+
+DELTA_TIMESTAMPS = {
+    "observation.state": [0],
+    "observation.images.base_camera": [0],
+    "observation.images.hand_camera": [0],
+    "action": [i / 20 for i in range(50)],
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, required=True, help="Path to train config yaml")
+    parser.add_argument("--config", type=str, required=True)
     return parser.parse_args()
 
 
 def train(cfg):
-    # Setup
     torch.manual_seed(cfg.experiment.seed)
-    device = torch.device(cfg.policy.device if torch.cuda.is_available() else "cpu")
-    log.info(f"Training on device: {device}")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    log.info(f"Training on: {device}")
 
-    # Setup output directories
     output_dir = Path(cfg.training.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialize W&B
     if cfg.wandb.enable:
         wandb.init(
             project=cfg.wandb.project,
@@ -49,10 +55,11 @@ def train(cfg):
             config=OmegaConf.to_container(cfg, resolve=True)
         )
 
-    # Load dataset
+    # Load dataset with action chunks
     log.info(f"Loading dataset: {cfg.dataset.repo_id}")
-    dataset = LeRobotDataset(cfg.dataset.repo_id)
-    
+    dataset = LeRobotDataset(cfg.dataset.repo_id, delta_timestamps=DELTA_TIMESTAMPS)
+    log.info(f"Dataset: {len(dataset)} frames, {dataset.num_episodes} episodes")
+
     dataloader = DataLoader(
         dataset,
         batch_size=cfg.training.batch_size,
@@ -60,25 +67,34 @@ def train(cfg):
         num_workers=4,
         pin_memory=True,
     )
-    log.info(f"Dataset loaded: {len(dataset)} frames, {dataset.num_episodes} episodes")
 
-    # Build MoH config
+    # Build MoH config and load pretrained weights
     moh_config = SmolVLAMoHConfig(
         horizons=list(cfg.moh.horizons),
         weighting=cfg.moh.weighting,
         moh_enabled=cfg.moh.enabled,
     )
+    moh_config.input_features = {
+        "observation.state": PolicyFeature(type=FeatureType.STATE, shape=(8,)),
+        "observation.images.base_camera": PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
+        "observation.images.hand_camera": PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
+    }
+    moh_config.output_features = {
+        "action": PolicyFeature(type=FeatureType.ACTION, shape=(8,)),
+    }
 
-    # Load pretrained SmolVLA weights and wrap with MoH
     log.info(f"Loading pretrained SmolVLA from: {cfg.policy.path}")
     policy = SmolVLAMoHPolicy.from_pretrained(cfg.policy.path, config=moh_config)
     policy = policy.to(device)
 
-    # Optimizer — include horizon_weights in optimization
-    optimizer = moh_config.get_optimizer_preset().build(policy.parameters())
-    scheduler = moh_config.get_scheduler_preset().build(optimizer)
+    # Build tokenizer for language inputs
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
 
-    # Training loop
+    # Optimizer
+    optimizer = moh_config.get_optimizer_preset().build(policy.parameters())
+    scheduler = moh_config.get_scheduler_preset().build(optimizer, num_training_steps=cfg.training.steps)
+
     log.info("Starting training...")
     step = 0
     policy.train()
@@ -88,39 +104,45 @@ def train(cfg):
             if step >= cfg.training.steps:
                 break
 
-            # Move batch to device
+            # Tokenize task description
+            tokens = tokenizer(
+                [TASK_DESCRIPTION] * len(batch["action"]),
+                return_tensors="pt",
+                padding="max_length",
+                max_length=48,
+                truncation=True,
+            )
+            batch["observation.language.tokens"] = tokens["input_ids"].to(device)
+            batch["observation.language.attention_mask"] = tokens["attention_mask"].bool().to(device)
             batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-
-            # Forward pass
             loss, loss_info = policy.forward(batch)
 
-            # Backward pass
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(policy.parameters(), moh_config.optimizer_grad_clip_norm)
+            torch.nn.utils.clip_grad_norm_(
+                policy.parameters(), moh_config.optimizer_grad_clip_norm
+            )
             optimizer.step()
             scheduler.step()
 
-            # Logging
             if step % cfg.training.log_freq == 0:
                 log.info(f"Step {step}/{cfg.training.steps} | Loss: {loss.item():.4f}")
                 if cfg.wandb.enable:
-                    wandb.log({"train/loss": loss.item(), "train/step": step})
+                    wandb.log({"train/loss": loss.item(), "step": step})
                     for k, v in loss_info.items():
-                        wandb.log({f"train/{k}": v, "train/step": step})
+                        if isinstance(v, torch.Tensor):
+                            wandb.log({f"train/{k}": v.item(), "step": step})
 
-            # Save checkpoint
             if step % cfg.training.save_freq == 0 and step > 0:
                 ckpt_dir = output_dir / f"checkpoint_{step:06d}"
                 policy.save_pretrained(ckpt_dir)
-                log.info(f"Saved checkpoint to {ckpt_dir}")
+                log.info(f"Saved checkpoint: {ckpt_dir}")
 
             step += 1
 
-    # Save final checkpoint
     final_dir = output_dir / "checkpoint_final"
     policy.save_pretrained(final_dir)
-    log.info(f"Training complete. Final checkpoint saved to {final_dir}")
+    log.info(f"Done. Final checkpoint: {final_dir}")
 
     if cfg.wandb.enable:
         wandb.finish()

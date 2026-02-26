@@ -3,8 +3,10 @@
 
 from dataclasses import dataclass, field
 from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
+from lerobot.configs.policies import PreTrainedConfig
 
 
+@PreTrainedConfig.register_subclass("smolvla_moh")
 @dataclass
 class SmolVLAMoHConfig(SmolVLAConfig):
     """
