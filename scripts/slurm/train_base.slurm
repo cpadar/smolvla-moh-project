@@ -7,22 +7,18 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:a100:1
 #SBATCH --partition=public
+#SBATCH --qos=class
+#SBATCH --account=class_eee515598spring2026
 
-set -a
-source .env
-set +a
+source ~/.bashrc
+conda activate smolvla-moh
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 mkdir -p results/logs results/checkpoints/smolvla_base
 
-singularity exec --nv \
-  --bind $(pwd):/workspace \
-  --bind ${MS_ASSET_DIR}:${MS_ASSET_DIR} \
-  --bind ~/.cache/huggingface:/root/.cache/huggingface \
-  smolvla-moh.sif \
-  bash -c "
-    cd /workspace &&
-    python scripts/train/train_base.py \
-      --config configs/train_base.yaml
-  "
+cd ~/smolvla-moh-project
+
+python scripts/train/train_base.py \
+  --config configs/train_base.yaml

@@ -66,7 +66,7 @@ def train(cfg):
 
     config = policy.config
     optimizer = config.get_optimizer_preset().build(policy.parameters())
-    scheduler = config.get_scheduler_preset().build(optimizer)
+    scheduler = config.get_scheduler_preset().build(optimizer, num_training_steps=cfg.training.steps)
 
     # Training loop
     log.info("Starting training...")
