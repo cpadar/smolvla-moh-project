@@ -13,32 +13,39 @@ import torch
 import wandb
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig
 from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+from lerobot.configs.types import FeatureType, PolicyFeature
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+TASK_DESCRIPTION = "Stack three cubes into a pyramid on the table."
+
+DELTA_TIMESTAMPS = {
+    "observation.state": [0],
+    "observation.images.base_camera": [0],
+    "observation.images.hand_camera": [0],
+    "action": [i / 20 for i in range(50)],
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, required=True, help="Path to train config yaml")
+    parser.add_argument("--config", type=str, required=True)
     return parser.parse_args()
 
 
 def train(cfg):
-    # Setup
     torch.manual_seed(cfg.experiment.seed)
-    device = torch.device(cfg.policy.device if torch.cuda.is_available() else "cpu")
-    log.info(f"Training on device: {device}")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    log.info(f"Training on: {device}")
 
-    # Setup output directories
     output_dir = Path(cfg.training.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialize W&B
     if cfg.wandb.enable:
         wandb.init(
             project=cfg.wandb.project,
@@ -46,29 +53,41 @@ def train(cfg):
             config=OmegaConf.to_container(cfg, resolve=True)
         )
 
-    # Load dataset
+    # Load dataset with action chunks
     log.info(f"Loading dataset: {cfg.dataset.repo_id}")
-    dataset = LeRobotDataset(cfg.dataset.repo_id)
+    dataset = LeRobotDataset(cfg.dataset.repo_id, delta_timestamps=DELTA_TIMESTAMPS)
+    log.info(f"Dataset: {len(dataset)} frames, {dataset.num_episodes} episodes")
 
     dataloader = DataLoader(
         dataset,
         batch_size=cfg.training.batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=1,
         pin_memory=True,
     )
-    log.info(f"Dataset loaded: {len(dataset)} frames, {dataset.num_episodes} episodes")
 
-    # Load pretrained SmolVLA
+    # Load pretrained SmolVLA and override features for our dataset
     log.info(f"Loading pretrained SmolVLA from: {cfg.policy.path}")
     policy = SmolVLAPolicy.from_pretrained(cfg.policy.path)
+
+    policy.config.input_features = {
+        "observation.state": PolicyFeature(type=FeatureType.STATE, shape=(8,)),
+        "observation.images.base_camera": PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
+        "observation.images.hand_camera": PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
+    }
+    policy.config.output_features = {
+        "action": PolicyFeature(type=FeatureType.ACTION, shape=(8,)),
+    }
+
     policy = policy.to(device)
+
+    # Build tokenizer
+    tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
 
     config = policy.config
     optimizer = config.get_optimizer_preset().build(policy.parameters())
     scheduler = config.get_scheduler_preset().build(optimizer, num_training_steps=cfg.training.steps)
 
-    # Training loop
     log.info("Starting training...")
     step = 0
     policy.train()
@@ -78,6 +97,16 @@ def train(cfg):
             if step >= cfg.training.steps:
                 break
 
+            # Tokenize task description
+            tokens = tokenizer(
+                [TASK_DESCRIPTION] * len(batch["action"]),
+                return_tensors="pt",
+                padding="max_length",
+                max_length=48,
+                truncation=True,
+            )
+            batch["observation.language.tokens"] = tokens["input_ids"].to(device)
+            batch["observation.language.attention_mask"] = tokens["attention_mask"].bool().to(device)
             batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
 
             loss, loss_info = policy.forward(batch)
@@ -91,20 +120,21 @@ def train(cfg):
             if step % cfg.training.log_freq == 0:
                 log.info(f"Step {step}/{cfg.training.steps} | Loss: {loss.item():.4f}")
                 if cfg.wandb.enable:
-                    wandb.log({"train/loss": loss.item(), "train/step": step})
+                    wandb.log({"train/loss": loss.item(), "step": step})
                     for k, v in loss_info.items():
-                        wandb.log({f"train/{k}": v, "train/step": step})
+                        if isinstance(v, torch.Tensor):
+                            wandb.log({f"train/{k}": v.item(), "step": step})
 
             if step % cfg.training.save_freq == 0 and step > 0:
                 ckpt_dir = output_dir / f"checkpoint_{step:06d}"
                 policy.save_pretrained(ckpt_dir)
-                log.info(f"Saved checkpoint to {ckpt_dir}")
+                log.info(f"Saved checkpoint: {ckpt_dir}")
 
             step += 1
 
     final_dir = output_dir / "checkpoint_final"
     policy.save_pretrained(final_dir)
-    log.info(f"Training complete. Final checkpoint saved to {final_dir}")
+    log.info(f"Done. Final checkpoint: {final_dir}")
 
     if cfg.wandb.enable:
         wandb.finish()
