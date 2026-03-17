@@ -49,7 +49,7 @@ LEROBOT_CAMERA_NAMES = {
 }
 
 # Task description — used by smolVLA's language conditioning
-TASK_DESCRIPTION = "Stack three cubes into a pyramid on the table."
+TASK_DESCRIPTION = "Pick up the red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 # Frames per second of the ManiSkill3 simulation
 FPS = 20
@@ -57,14 +57,16 @@ FPS = 20
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+# def get_robot_state(traj: h5py.Group, step: int) -> np.ndarray:
+#     """
+#     Extract robot joint state at a given timestep.
+#     Uses the panda_wristcam articulation state (31 values).
+#     We take the first 8 values which correspond to joint positions.
+#     """
+#     return traj["env_states/articulations/panda_wristcam"][step, :ACTION_DIM]
 def get_robot_state(traj: h5py.Group, step: int) -> np.ndarray:
-    """
-    Extract robot joint state at a given timestep.
-    Uses the panda_wristcam articulation state (31 values).
-    We take the first 8 values which correspond to joint positions.
-    """
-    return traj["env_states/articulations/panda_wristcam"][step, :ACTION_DIM]
-
+    """Extract robot joint positions (qpos) at a given timestep."""
+    return traj["obs/agent/qpos"][step]
 
 def get_action(traj: h5py.Group, step: int) -> np.ndarray:
     """Extract action (joint position command) at a given timestep."""
@@ -137,8 +139,8 @@ def convert(
     features = {
         "observation.state": {
             "dtype": "float32",
-            "shape": (ACTION_DIM,),
-            "names": [f"joint_{i}" for i in range(ACTION_DIM)],
+            "shape": (9,),
+            "names": [f"joint_{i}" for i in range(9)],
         },
         "action": {
             "dtype": "float32",
@@ -187,8 +189,8 @@ def convert(
                 # Convert HWC -> CHW for LeRobot
                 frame[lerobot_name] = Image.fromarray(img)
 
-            frame["task"] = "Stack three cubes into a pyramid on the table."
-        dataset.add_frame(frame)
+            frame["task"] = "Pick up the red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+            dataset.add_frame(frame)
 
         # Save this episode with the task description
         dataset.save_episode()

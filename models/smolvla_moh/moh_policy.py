@@ -71,8 +71,8 @@ class SmolVLAMoHPolicy(SmolVLAPolicy):
         
         images, img_masks = self.prepare_images(batch)
         state = self.prepare_state(batch)
-        lang_tokens = batch["observation.language_tokens"]
-        lang_masks = batch["observation.language_attention_mask"]
+        lang_tokens = batch["observation.language.tokens"]
+        lang_masks = batch["observation.language.attention_mask"]
         
         max_horizon = max(self.moh_config.horizons)
         horizon_actions = []

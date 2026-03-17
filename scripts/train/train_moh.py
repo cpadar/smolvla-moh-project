@@ -24,7 +24,7 @@ from models.smolvla_moh.moh_policy import SmolVLAMoHPolicy
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-TASK_DESCRIPTION = "Stack three cubes into a pyramid on the table."
+TASK_DESCRIPTION = "Pick up the red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 DELTA_TIMESTAMPS = {
     "observation.state": [0],
@@ -75,7 +75,7 @@ def train(cfg):
         moh_enabled=cfg.moh.enabled,
     )
     moh_config.input_features = {
-        "observation.state": PolicyFeature(type=FeatureType.STATE, shape=(8,)),
+        "observation.state": PolicyFeature(type=FeatureType.STATE, shape=(9,)),
         "observation.images.base_camera": PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
         "observation.images.hand_camera": PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
     }

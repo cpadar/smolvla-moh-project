@@ -10,7 +10,7 @@ policy:
   device: cuda
 
 dataset:
-  repo_id: ceshank01/stack-pyramid-v1
+  repo_id: ceshank01/stack-pyramid-v1-v2
   split: train
 
 training:
