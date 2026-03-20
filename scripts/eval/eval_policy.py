@@ -61,12 +61,21 @@ def evaluate(args):
 
     # Create environment
     render_mode = "human" if args.render else "rgb_array"
+    # env = gym.make(
+    #     "StackPyramid-v1",
+    #     obs_mode="rgbd",
+    #     control_mode="pd_joint_pos",
+    #     render_mode=render_mode,
+    #     num_envs=1,
+    # )
     env = gym.make(
         "StackPyramid-v1",
         obs_mode="rgbd",
         control_mode="pd_joint_pos",
         render_mode=render_mode,
         num_envs=1,
+        sensor_configs=dict(width=512, height=512),
+        human_render_camera_configs=dict(width=1280, height=720),
     )
 
     if args.save_video:
@@ -80,7 +89,12 @@ def evaluate(args):
         done = False
         step = 0
         success = False
+        success_step = None
         frames = []
+        
+        # Track sub-goals
+        red_next_to_green = False
+        blue_on_top = False
 
         try:
             policy.reset()
@@ -88,7 +102,6 @@ def evaluate(args):
             pass
 
         while not done and step < 300:
-            # Only re-query model every n_action_steps
             if step % 10 == 0:
                 raw_batch = {
                     "observation.state": obs["agent"]["qpos"].squeeze(0).unsqueeze(0).cpu(),
@@ -99,27 +112,59 @@ def evaluate(args):
                 processed_batch = preprocessor(raw_batch)
                 with torch.no_grad():
                     action_chunk = policy.predict_action_chunk(processed_batch)
-                # Unnormalize the entire chunk
                 policy_action = transition_to_policy_action({"action": action_chunk})
                 unnorm = postprocessor(policy_action)
                 unnorm_chunk = policy_action_to_transition(unnorm)["action"]
                 chunk_idx = 0
 
-            # Execute next action from current chunk
             action_np = unnorm_chunk[:, chunk_idx, :].cpu().numpy().squeeze()
             chunk_idx += 1
 
             obs, reward, terminated, truncated, info = env.step(action_np)
             done = bool(terminated.any()) or bool(truncated.any())
 
-            if bool(torch.tensor(info.get("success", False)).any()):
+            # Get detailed sub-goal metrics
+            eval_info = env.unwrapped.evaluate()
+            # if bool(eval_info["success"].any()):
+            #     success = True
+            #     done = True
+            if bool(eval_info["success"].any()) and not success:
                 success = True
+                success_step = step
+
+            # Keep running 20 steps after success for video
+            if success and step >= success_step + 20:
                 done = True
 
+            # Track sub-goals
+            pos_A = env.unwrapped.cubeA.pose.p
+            pos_B = env.unwrapped.cubeB.pose.p
+            offset_AB = pos_A - pos_B
+            xy_dist = torch.linalg.norm(offset_AB[..., :2], axis=1).item()
+            cube_size = torch.linalg.norm(2 * env.unwrapped.cube_half_size[:2]).item()
+            if xy_dist <= cube_size + 0.005:
+                red_next_to_green = True
+
             if args.save_video:
-                frames.append(obs["sensor_data"]["base_camera"]["rgb"].squeeze(0).cpu().numpy())
+                # frames.append(obs["sensor_data"]["base_camera"]["rgb"].squeeze(0).cpu().numpy())
+                # frame = env.render()
+                # if frame is not None:
+                #     frames.append(frame.squeeze(0) if frame.ndim == 4 else frame)
+                frame = env.render()
+                if frame is not None:
+                    frames.append(frame.squeeze(0).cpu().numpy())
 
             step += 1
+
+        successes.append(success)
+        episode_lengths.append(step)
+
+        msg = (f"Episode {episode+1}/{args.num_episodes} | "
+               f"Success: {success} | Steps: {step} | "
+               f"Red→Green: {red_next_to_green} | "
+               f"Running SR: {np.mean(successes):.2%}")
+        print(msg, flush=True)
+
 
         # while not done and step < 300:
         #     # Build raw batch using camera1/camera2 names to match training
