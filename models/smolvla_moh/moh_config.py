@@ -16,13 +16,13 @@ class SmolVLAMoHConfig(SmolVLAConfig):
     and fuses their action predictions.
     
     Args:
-        horizons: List of action chunk lengths to use (e.g. [5, 15, 50])
+        horizons: List of action chunk lengths to use (e.g. [10,25, 50])
         weighting: How to combine horizon outputs:
             - 'uniform': equal weight to all horizons
             - 'learned': learnable scalar weights per horizon
         moh_enabled: Toggle to disable MoH and fall back to standard SmolVLA
     """
-    horizons: list = field(default_factory=lambda: [5, 15, 50])
+    horizons: list = field(default_factory=lambda: [10, 25, 50])
     weighting: str = "learned"
     moh_enabled: bool = True
 

@@ -102,7 +102,7 @@ def evaluate(args):
             pass
 
         while not done and step < 300:
-            if step % 10 == 0:
+            if step % 20 == 0:
                 raw_batch = {
                     "observation.state": obs["agent"]["qpos"].squeeze(0).unsqueeze(0).cpu(),
                     "observation.images.base_camera": obs["sensor_data"]["base_camera"]["rgb"].squeeze(0).permute(2, 0, 1).unsqueeze(0).float().cpu() / 255.0,
