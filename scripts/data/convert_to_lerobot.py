@@ -49,7 +49,7 @@ LEROBOT_CAMERA_NAMES = {
 }
 
 # Task description — used by smolVLA's language conditioning
-TASK_DESCRIPTION = "Pick up the red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+TASK_DESCRIPTION = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 # Frames per second of the ManiSkill3 simulation
 FPS = 20

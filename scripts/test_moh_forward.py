@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 device = torch.device('cuda')
 
 DATASET_REPO = 'ceshank01/stack-pyramid-v1-v3'
-TASK = 'Pick up the red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid.'
+TASK = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 BATCH_SIZE = 2
 
 print('Loading dataset...')
