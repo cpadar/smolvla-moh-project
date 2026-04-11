@@ -27,7 +27,6 @@ python scripts/slurm/patch_factory.py
 
 # Test run - 3 steps only
 cd ~/lerobot && lerobot-train \
-  --policy.path=lerobot/smolvla_base \
   --policy.type=smolvla_moh \
   --dataset.repo_id=ceshank01/stack-pyramid-v1-v4 \
   --batch_size=16 \
