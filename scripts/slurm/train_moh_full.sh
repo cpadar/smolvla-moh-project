@@ -19,7 +19,6 @@ conda activate smolvla-moh
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 cd ~/smolvla-moh-project
-git pull
 mkdir -p logs
 
 # Patch LeRobot factory
@@ -27,7 +26,6 @@ python scripts/slurm/patch_factory.py
 
 # Full training run
 cd ~/lerobot && lerobot-train \
-  --policy.path=lerobot/smolvla_base \
   --policy.type=smolvla_moh \
   --dataset.repo_id=ceshank01/stack-pyramid-v1-v4 \
   --batch_size=16 \
