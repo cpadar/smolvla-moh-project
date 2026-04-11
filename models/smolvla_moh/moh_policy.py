@@ -690,7 +690,7 @@ class SmolVLAMoHModel(VLAFlowMatching):
 class SmolVLAMoHPolicy(SmolVLAPolicy):
     """SmolVLA policy with Mixture of Horizons action chunking."""
 
-    def __init__(self, config: SmolVLAMoHConfig):
-        super().__init__(config)
+    def __init__(self, config: SmolVLAMoHConfig, **kwargs):
+        super().__init__(config, **kwargs)
         # Replace the standard model with MoH model
         self.model = SmolVLAMoHModel(config)
