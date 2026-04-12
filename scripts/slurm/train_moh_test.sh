@@ -28,11 +28,11 @@ python scripts/slurm/patch_factory.py
 cd ~/lerobot && lerobot-train \
   --policy.type=smolvla_moh \
   --dataset.repo_id=ceshank01/stack-pyramid-v1-v4 \
-  --batch_size=16 \
-  --steps=20000 \
+  --batch_size=64 \
+  --steps=3 \
   --save_freq=5000 \
-  --output_dir=~/smolvla-moh-project/results/moh_v1 \
-  --job_name=smolvla_moh_v1 \
+  --output_dir=/home/cpadar/smolvla-moh-project/results/moh_test2 \
+  --job_name=smolvla_moh_test2 \
   --policy.device=cuda \
   --wandb.enable=true \
   --policy.push_to_hub=false \
