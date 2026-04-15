@@ -461,7 +461,7 @@ class SmolVLAMoHModel(VLAFlowMatching):
             position_ids=position_ids_h,
             past_key_values=prefix_past_key_values,
             inputs_embeds=[None, suffix_embs_h],
-            use_cache=False,
+            use_cache=True,
             fill_kv_cache=False,
         )
         return outputs_embeds_h[1].to(torch.float32)

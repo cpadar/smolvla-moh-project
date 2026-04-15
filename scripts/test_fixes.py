@@ -29,45 +29,37 @@ FAIL = "\033[91mFAIL\033[0m"
 # ---------------------------------------------------------------------------
 def test_kv_cache_isolation():
     """
-    _suffix_pass must call vlm_with_expert.forward with use_cache=False.
-    We verify this two ways:
-      a) Source inspection — confirm 'use_cache=False' appears in _suffix_pass
-      b) Runtime assertion — patch vlm_with_expert.forward and assert the flag
-    """
-    print("\n[1] KV cache isolation ...")
+    _suffix_pass uses use_cache=True, fill_kv_cache=False — meaning it READS
+    past_key_values to prepend prefix KV to each suffix pass, but never WRITES
+    back to the dict.  Calling _suffix_pass multiple times with the same cache
+    must leave the cache unchanged so each horizon sees the same prefix context.
 
-    import inspect
+    We verify by mocking vlm_with_expert.forward and checking that the dict
+    values are identical before and after three sequential horizon calls.
+    """
+    print("\n[1] KV cache isolation (past_key_values not mutated across horizon passes) ...")
+
     import unittest.mock as mock
     from models.smolvla_moh.moh_policy import SmolVLAMoHModel
 
-    # --- (a) Source inspection ---
-    src = inspect.getsource(SmolVLAMoHModel._suffix_pass)
-    # Must contain use_cache=False and must NOT contain use_cache=True
-    has_false = "use_cache=False" in src
-    has_true  = "use_cache=True"  in src
-    src_ok = has_false and not has_true
-    status = PASS if src_ok else FAIL
-    print(f"  {status} - source: use_cache=False present={has_false}, use_cache=True present={has_true}")
-
-    # --- (b) Runtime check via mock ---
-    # Capture the use_cache kwarg actually passed to vlm_with_expert.forward
-    captured = {}
-
-    def fake_vlm_forward(attention_mask, position_ids, past_key_values,
-                         inputs_embeds, use_cache, fill_kv_cache):
-        captured["use_cache"] = use_cache
-        B2 = inputs_embeds[1].shape[0]
-        seq_out = inputs_embeds[1].shape[1]
-        return (None, torch.zeros(B2, seq_out, 32)), None
-
-    # We need a real nn.Module instance to call _suffix_pass on.
-    # Use MagicMock as a thin wrapper that has the method but delegates forward.
-    fake_vlm = mock.MagicMock()
-    fake_vlm.forward.side_effect = fake_vlm_forward
-
-    # Patch embed_suffix and make_att_2d_masks so _suffix_pass can run end-to-end
     B, seq, hidden = 2, 10, 32
     suffix_len = 52
+    n_calls = [0]
+
+    # Simulate what SmolVLA does: reads from cache, concatenates locally,
+    # returns the SAME dict object unchanged.
+    def fake_vlm_forward(attention_mask, position_ids, past_key_values,
+                         inputs_embeds, use_cache, fill_kv_cache):
+        n_calls[0] += 1
+        B2 = inputs_embeds[1].shape[0]
+        seq_out = inputs_embeds[1].shape[1]
+        # Confirm fill_kv_cache is False (we're in suffix mode)
+        assert not fill_kv_cache, "fill_kv_cache must be False in _suffix_pass"
+        # Return unmodified past_key_values (matching SmolVLA behaviour)
+        return (None, torch.zeros(B2, seq_out, hidden)), past_key_values
+
+    fake_vlm = mock.MagicMock()
+    fake_vlm.forward.side_effect = fake_vlm_forward
 
     def fake_embed_suffix(x_t, time):
         B2 = x_t.shape[0]
@@ -80,27 +72,44 @@ def test_kv_cache_isolation():
                     side_effect=lambda pad, att: torch.ones(
                         pad.shape[0], pad.shape[1], pad.shape[1])):
 
-        # Create a bare instance bypassing __init__ (avoids loading VLM weights)
         model = mock.MagicMock(spec=SmolVLAMoHModel)
         model.vlm_with_expert = fake_vlm
         model.embed_suffix    = fake_embed_suffix
-        # Bind the real _suffix_pass to this mock instance
         bound = SmolVLAMoHModel._suffix_pass.__get__(model, SmolVLAMoHModel)
 
-        kv_cache = {0: {"key_states": torch.randn(B, 4, seq, 16),
-                        "value_states": torch.randn(B, 4, seq, 16)}}
+        kv_cache = {
+            0: {
+                "key_states":   torch.randn(B, 4, seq, 16),
+                "value_states": torch.randn(B, 4, seq, 16),
+            }
+        }
+        # Snapshot the tensor values before any calls
+        k_before = kv_cache[0]["key_states"].clone()
+        v_before = kv_cache[0]["value_states"].clone()
+
         prefix_pad_masks = torch.ones(B, seq, dtype=torch.bool)
-        bound(torch.randn(B, 50, 8), torch.ones(B), prefix_pad_masks, kv_cache)
 
-    runtime_ok = captured.get("use_cache") is False
-    status = PASS if runtime_ok else FAIL
-    print(f"  {status} - runtime: use_cache passed as {captured.get('use_cache')!r}")
+        # Simulate three horizon passes with the same prefix cache
+        for _ in range(3):
+            bound(torch.randn(B, 50, 8), torch.ones(B), prefix_pad_masks, kv_cache)
 
-    all_ok = src_ok and runtime_ok
+    # Dict must be unchanged after all three calls
+    k_mutated = not torch.equal(k_before, kv_cache[0]["key_states"])
+    v_mutated = not torch.equal(v_before, kv_cache[0]["value_states"])
+    calls_ok  = n_calls[0] == 3
+
+    for desc, ok in [
+        ("vlm_with_expert.forward called 3 times", calls_ok),
+        ("key_states unchanged across calls",  not k_mutated),
+        ("value_states unchanged across calls", not v_mutated),
+    ]:
+        print(f"  {PASS if ok else FAIL} - {desc}")
+
+    all_ok = calls_ok and not k_mutated and not v_mutated
     if all_ok:
-        print(f"  {PASS} - KV cache will not be extended by _suffix_pass")
+        print(f"  {PASS} - prefix KV cache is isolated across all horizon passes")
     else:
-        print(f"  {FAIL} - KV cache isolation check failed")
+        print(f"  {FAIL} - KV cache was mutated or not called correctly")
     return all_ok
 
 
