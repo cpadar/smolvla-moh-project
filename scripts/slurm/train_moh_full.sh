@@ -31,8 +31,8 @@ cd ~/lerobot && lerobot-train \
   --batch_size=64 \
   --steps=20000 \
   --save_freq=5000 \
-  --output_dir=/home/cpadar/smolvla-moh-project/results/moh_v3 \
-  --job_name=smolvla_moh_v3 \
+  --output_dir=/home/cpadar/smolvla-moh-project/results/moh_v4 \
+  --job_name=smolvla_moh_v4 \
   --policy.device=cuda \
   --wandb.enable=true \
   --policy.push_to_hub=false \

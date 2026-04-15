@@ -461,7 +461,7 @@ class SmolVLAMoHModel(VLAFlowMatching):
             position_ids=position_ids_h,
             past_key_values=prefix_past_key_values,
             inputs_embeds=[None, suffix_embs_h],
-            use_cache=True,
+            use_cache=False,
             fill_kv_cache=False,
         )
         return outputs_embeds_h[1].to(torch.float32)
@@ -593,12 +593,14 @@ class SmolVLAMoHModel(VLAFlowMatching):
         # Combined loss: L = L_mix + 1.0 * L_ind + 0.001 * L_bal
         total_loss = auxiliary_loss + 1.0 * individual_loss + 0.001 * load_balancing_loss
 
-        # Return per-sample losses for LeRobot training loop compatibility
+        # Return per-sample losses scaled by total_loss so all three components
+        # contribute gradients during backprop
         losses = F.mse_loss(
             v_t_combined[:, :, :self.config.max_action_dim],
             u_t, reduction="none"
         )
-        return losses
+        loss_scale = total_loss / (auxiliary_loss.detach() + 1e-8)
+        return losses * loss_scale
 
     def sample_actions(self, images, img_masks, lang_tokens, lang_masks,
                        state, noise=None, **kwargs) -> Tensor:

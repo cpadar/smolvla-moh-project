@@ -163,46 +163,6 @@ def evaluate(args):
                f"Red→Green: {red_next_to_green} | "
                f"Running SR: {np.mean(successes):.2%}")
         print(msg, flush=True)
-
-
-        # while not done and step < 300:
-        #     # Build raw batch using camera1/camera2 names to match training
-        #     raw_batch = {
-        #         "observation.state": obs["agent"]["qpos"].squeeze(0).unsqueeze(0).cpu(),
-        #         "observation.images.base_camera": obs["sensor_data"]["base_camera"]["rgb"].squeeze(0).permute(2, 0, 1).unsqueeze(0).float().cpu() / 255.0,
-        #         "observation.images.hand_camera": obs["sensor_data"]["hand_camera"]["rgb"].squeeze(0).permute(2, 0, 1).unsqueeze(0).float().cpu() / 255.0,
-        #         "task": TASK_DESCRIPTION,
-        #     }
-
-        #     # Apply preprocessor (handles normalization and tokenization)
-        #     processed_batch = preprocessor(raw_batch)
-
-        #     with torch.no_grad():
-        #                     action = policy.select_action(processed_batch)
-
-        #     # Apply postprocessor to unnormalize action
-        #     from lerobot.processor.converters import transition_to_policy_action, policy_action_to_transition
-        #     policy_action = transition_to_policy_action({"action": action})
-        #     unnorm_policy_action = postprocessor(policy_action)
-        #     unnorm_transition = policy_action_to_transition(unnorm_policy_action)
-        #     action_np = unnorm_transition["action"].cpu().numpy().squeeze()
-        #     obs, reward, terminated, truncated, info = env.step(action_np)
-        #     done = bool(terminated.any()) or bool(truncated.any())
-
-        #     if bool(torch.tensor(info.get("success", False)).any()):
-        #         success = True
-        #         done = True
-
-        #     if args.save_video:
-        #         frames.append(obs["sensor_data"]["base_camera"]["rgb"].squeeze(0).cpu().numpy())
-
-        #     step += 1
-
-        successes.append(success)
-        episode_lengths.append(step)
-
-        msg = f"Episode {episode+1}/{args.num_episodes} | Success: {success} | Steps: {step} | Running SR: {np.mean(successes):.2%}"
-        print(msg, flush=True)
         log.info(msg)
 
         if args.save_video and frames:
