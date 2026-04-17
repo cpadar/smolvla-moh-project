@@ -9,7 +9,7 @@ from torch import Tensor
 from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy, VLAFlowMatching
 from lerobot.policies.smolvla.modeling_smolvla import make_att_2d_masks
 from models.smolvla_moh.moh_config import SmolVLAMoHConfig
-
+from lerobot.utils.constants import ACTION, OBS_LANGUAGE_TOKENS, OBS_LANGUAGE_ATTENTION_MASK
 
 class SmolVLAMoHModel(VLAFlowMatching):
     """
@@ -177,16 +177,10 @@ class SmolVLAMoHModel(VLAFlowMatching):
 
         # Total loss — backprop through all three components
         total_loss = auxiliary_loss + 1.0 * individual_loss + 0.001 * load_balancing_loss
-
-        # Return per-sample losses in format LeRobot expects: (B, T, D)
-        # We scale so that total_loss gradients flow correctly
-        per_sample = F.mse_loss(
-            v_t_combined[:, :, :self.config.max_action_dim],
-            u_t, reduction="none"
-        )
-        # Multiply by ratio so the full total_loss gradient is preserved
-        scale = (total_loss / (auxiliary_loss.detach() + 1e-8)).detach()
-        return per_sample * scale
+        # Return total_loss in shape (B, T, D) that LeRobot expects
+        # LeRobot will call .mean() on this, so we expand total_loss to match shape
+        # This ensures all 3 loss components backpropagate correctly
+        return total_loss.expand(batch_size, max_horizon, self.config.max_action_dim)
 
     def sample_actions(self, images, img_masks, lang_tokens, lang_masks,
                        state, noise=None, **kwargs) -> Tensor:
@@ -220,6 +214,7 @@ class SmolVLAMoHModel(VLAFlowMatching):
         # Iterative denoising
         dt = -1.0 / self.config.num_steps
         x_t = noise
+        l1_disagreement_sum = torch.zeros(bsize, max_horizon, device=device)
 
         for step in range(self.config.num_steps):
             time_val = 1.0 + step * dt
@@ -259,9 +254,64 @@ class SmolVLAMoHModel(VLAFlowMatching):
 
             all_v_t_preds_t = torch.stack(all_v_t_preds, dim=1)  # (B, num_h, max_h, D)
             v_t = (gate_weights.permute(0, 2, 1).unsqueeze(-1) * all_v_t_preds_t).sum(dim=1)
+            
+            # Track disagreement between fused and individual predictions
+            indiv_steps = x_t.unsqueeze(1) + dt * all_v_t_preds_t  # (B, num_h, max_h, D)
+            fused_step = x_t + dt * v_t  # (B, max_h, D)
+            per_step_l1 = torch.sum(
+                torch.abs(indiv_steps - fused_step.unsqueeze(1)), dim=-1
+            )  # (B, num_h, max_h)
+            # Weight by gate weights and sum over horizons
+            weighted_l1 = (per_step_l1 * gate_weights.permute(0, 2, 1)).sum(dim=1)  # (B, max_h)
+            l1_disagreement_sum += weighted_l1
+
             x_t = x_t + dt * v_t
 
-        return x_t
+        return x_t, l1_disagreement_sum
+
+    def get_execution_steps(self, l1_disagreement, min_steps=10, scale_ratio=1.0):
+        """
+        Determine how many steps to execute based on cross-horizon disagreement.
+        Execute until disagreement exceeds the baseline threshold.
+        """
+        max_horizon = self.horizons[-1]
+        threshold = l1_disagreement[:min_steps].mean() * scale_ratio
+        
+        execute_steps = min_steps
+        for step in range(min_steps, max_horizon):
+            active = sum(1 for h in self.horizons if step < h)
+            if active <= 1:
+                break
+            if l1_disagreement[step] < threshold:
+                execute_steps += 1
+            else:
+                break
+        
+        return max(min_steps, execute_steps)
+
+    def get_execution_steps(self, l1_disagreement_sum, min_steps=10, scale_ratio=1.0):
+        """
+        Determine how many steps to execute based on cross-horizon disagreement.
+        Execute until disagreement exceeds the baseline threshold.
+        """
+        max_horizon = self.horizons[-1]
+        device = l1_disagreement_sum.device
+        
+        # Baseline threshold from first min_steps
+        threshold = l1_disagreement_sum[:min_steps].mean() * scale_ratio
+        
+        execute_steps = min_steps
+        for step in range(min_steps, max_horizon):
+            # Only consider steps where multiple horizons are still active
+            active = sum(1 for h in self.horizons if step < h)
+            if active <= 1:
+                break
+            if l1_disagreement_sum[step] < threshold:
+                execute_steps += 1
+            else:
+                break
+        
+        return max(min_steps, execute_steps)
 
 
 class SmolVLAMoHPolicy(SmolVLAPolicy):
@@ -281,3 +331,31 @@ class SmolVLAMoHPolicy(SmolVLAPolicy):
         # Load pretrained weights back in (gate layers will be missing = random init)
         missing, unexpected = self.model.load_state_dict(pretrained_state, strict=False)
         print(f"MoH model loaded. New layers (random init): {missing}")
+
+    def _get_action_chunk(self, batch, noise=None, **kwargs):
+        for k in batch:
+            if k in self._queues and k != ACTION:
+                batch[k] = torch.stack(list(self._queues[k]), dim=1)
+        
+        images, img_masks = self.prepare_images(batch)
+        state = self.prepare_state(batch)
+        lang_tokens = batch[OBS_LANGUAGE_TOKENS]
+        lang_masks = batch[OBS_LANGUAGE_ATTENTION_MASK]
+        
+        actions, l1_disagreement = self.model.sample_actions(
+            images, img_masks, lang_tokens, lang_masks, state, noise=noise
+        )
+        
+        # Dynamic execution steps
+        exec_steps = self.model.get_execution_steps(
+            l1_disagreement[0],  # batch size 1 at inference
+            min_steps=self.config.horizons[0],  # min = shortest horizon
+        )
+        
+        # Trim to dynamic execution length
+        actions = actions[:, :exec_steps, :]
+        
+        # Unpad actions
+        original_action_dim = self.config.action_feature.shape[0]
+        actions = actions[:, :, :original_action_dim]
+        return actions

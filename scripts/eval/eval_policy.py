@@ -18,7 +18,7 @@ from lerobot.processor.converters import transition_to_policy_action, policy_act
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-TASK_DESCRIPTION = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+TASK_DESCRIPTION = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -39,6 +39,7 @@ def evaluate(args):
     # Load policy
     if args.model_type == "moh":
         policy = SmolVLAMoHPolicy.from_pretrained(args.model)
+        policy.config.pretrained_path = args.model
     else:
         policy = SmolVLAPolicy.from_pretrained(args.model)
     policy = policy.to(device)

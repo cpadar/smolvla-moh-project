@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 device = torch.device('cuda')
 
 DATASET_REPO = 'ceshank01/stack-pyramid-v1-v3'
-TASK = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+TASK = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 BATCH_SIZE = 2
 
 print('Loading dataset...')
@@ -48,6 +48,7 @@ cfg.output_features = output_features
 policy = SmolVLAMoHPolicy.from_pretrained('lerobot/smolvla_base', config=cfg)
 policy = policy.to(device).train()
 print('Policy loaded')
+
 
 preprocessor, _ = make_pre_post_processors(
     policy_cfg=cfg,

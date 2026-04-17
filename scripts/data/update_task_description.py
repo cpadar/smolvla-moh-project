@@ -7,7 +7,7 @@ from huggingface_hub import HfApi
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 import json
 
-NEW_TASK = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+NEW_TASK = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 def update_dataset_task(repo_id):
     print(f"Updating task for {repo_id}...")

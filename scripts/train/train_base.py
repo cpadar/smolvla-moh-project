@@ -22,7 +22,7 @@ from lerobot.configs.types import FeatureType, PolicyFeature
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-TASK_DESCRIPTION = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+TASK_DESCRIPTION = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 DELTA_TIMESTAMPS = {
     "observation.state": [0],
