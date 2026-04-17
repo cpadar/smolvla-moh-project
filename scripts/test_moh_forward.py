@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 device = torch.device('cuda')
 
-DATASET_REPO = 'ceshank01/stack-pyramid-v1-v3'
+DATASET_REPO = 'ceshank01/stack-pyramid-v1-v2'
 TASK = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 BATCH_SIZE = 2
 
@@ -32,8 +32,8 @@ dataset = LeRobotDataset(
 print(f'Dataset loaded: {len(dataset)} frames')
 
 input_features = {
-    'observation.images.camera1': PolicyFeature(type=FeatureType.VISUAL, shape=(3, 512, 512)),
-    'observation.images.camera2': PolicyFeature(type=FeatureType.VISUAL, shape=(3, 512, 512)),
+    'observation.images.base_camera': PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
+    'observation.images.hand_camera': PolicyFeature(type=FeatureType.VISUAL, shape=(3, 128, 128)),
     'observation.state': PolicyFeature(type=FeatureType.STATE, shape=(9,)),
 }
 output_features = {
@@ -60,8 +60,6 @@ print('Loading batch...')
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 batch = next(iter(dataloader))
 
-batch['observation.images.camera1'] = batch.pop('observation.images.base_camera')
-batch['observation.images.camera2'] = batch.pop('observation.images.hand_camera')
 batch['task'] = [TASK] * BATCH_SIZE
 
 batch = preprocessor(batch)
