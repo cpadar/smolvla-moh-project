@@ -2,6 +2,7 @@
 # SmolVLA with Mixture of Horizons (MoH)
 # Based on "Mixture of Horizons in Action Chunking" (Jing et al., 2025)
 
+from matplotlib.pyplot import step
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -251,6 +252,9 @@ class SmolVLAMoHModel(VLAFlowMatching):
                             torch.finfo(gate_logits.dtype).min),
                 dim=-1
             )
+            # Store gate weight distribution for logging (last denoising step only)
+            if step == self.config.num_steps - 1:
+                self.last_gate_weights = gate_weights.mean(dim=(0, 1)).detach().cpu()  # (num_horizons,)
 
             all_v_t_preds_t = torch.stack(all_v_t_preds, dim=1)  # (B, num_h, max_h, D)
             v_t = (gate_weights.permute(0, 2, 1).unsqueeze(-1) * all_v_t_preds_t).sum(dim=1)
@@ -351,7 +355,8 @@ class SmolVLAMoHPolicy(SmolVLAPolicy):
             l1_disagreement[0],  # batch size 1 at inference
             min_steps=self.config.horizons[0],  # min = shortest horizon
         )
-        
+        # Store for logging
+        self.last_exec_steps = exec_steps
         # Trim to dynamic execution length
         actions = actions[:, :exec_steps, :]
         

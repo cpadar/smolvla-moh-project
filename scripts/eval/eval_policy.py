@@ -18,8 +18,8 @@ from lerobot.processor.converters import transition_to_policy_action, policy_act
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# TASK_DESCRIPTION = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
-TASK_DESCRIPTION = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+TASK_DESCRIPTION = "Pick up  a red cube, place it next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
+# TASK_DESCRIPTION = "Push the red cube next to the green cube, then stack the blue cube on top of the red and green cube to form a pyramid."
 
 
 def parse_args():
@@ -97,6 +97,7 @@ def evaluate(args):
         # Track sub-goals
         red_next_to_green = False
         blue_on_top = False
+        episode_exec_steps = []
 
         try:
             policy.reset()
@@ -114,6 +115,8 @@ def evaluate(args):
                 processed_batch = preprocessor(raw_batch)
                 with torch.no_grad():
                     action_chunk = policy.predict_action_chunk(processed_batch)
+                    if args.model_type == "moh":
+                        episode_exec_steps.append(policy.last_exec_steps)
                 policy_action = transition_to_policy_action({"action": action_chunk})
                 unnorm = postprocessor(policy_action)
                 unnorm_chunk = policy_action_to_transition(unnorm)["action"]
@@ -167,6 +170,16 @@ def evaluate(args):
                f"Running SR: {np.mean(successes):.2%}")
         print(msg, flush=True)
         log.info(msg)
+        if args.model_type == "moh" and episode_exec_steps:
+            print(f"  Horizon — min: {min(episode_exec_steps)} | "
+                  f"max: {max(episode_exec_steps)} | "
+                  f"avg: {sum(episode_exec_steps)/len(episode_exec_steps):.1f} | "
+                  f"all: {episode_exec_steps}")
+            if hasattr(policy.model, 'last_gate_weights'):
+                weights = policy.model.last_gate_weights
+                for i, (h, w) in enumerate(zip(policy.config.horizons, weights)):
+                    print(f"  Horizon {h} avg gate weight: {w:.3f}", flush=True)
+
 
         if args.save_video and frames:
             import imageio
