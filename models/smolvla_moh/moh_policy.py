@@ -67,7 +67,7 @@ class SmolVLAMoHModel(VLAFlowMatching):
         """
         MoH training forward pass.
         Returns per-sample losses compatible with LeRobot training loop.
-        Total loss = L_mix + L_ind + 0.001 * L_bal backpropagated via total_loss.
+        Total loss = L_mix + L_ind + 0.01 * L_bal backpropagated via total_loss.
         """
         num_horizons = len(self.horizons)
         max_horizon = self.horizons[-1]
@@ -177,7 +177,7 @@ class SmolVLAMoHModel(VLAFlowMatching):
         load_balancing_loss = torch.mean(torch.stack(loss_components))
 
         # Total loss — backprop through all three components
-        total_loss = auxiliary_loss + 1.0 * individual_loss + 0.001 * load_balancing_loss
+        total_loss = auxiliary_loss + 1.0 * individual_loss + 0.01 * load_balancing_loss
         # Return total_loss in shape (B, T, D) that LeRobot expects
         # LeRobot will call .mean() on this, so we expand total_loss to match shape
         # This ensures all 3 loss components backpropagate correctly
