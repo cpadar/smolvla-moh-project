@@ -29,10 +29,7 @@ smolvla-moh-project/
 │   ├── train/                # Training entry points
 │   ├── eval/                 # Evaluation entry points
 │   └── slurm/                # SLURM batch scripts for SOL supercomputer
-├── docker/
-│   ├── Dockerfile
-│   └── .dockerignore
-├── notebooks/                # Exploratory notebooks
+├── notebooks/                # Google Colab Notebook for SmolVLA fine-tuning
 ├── results/                  # Eval output logs and plots (gitignored except structure)
 └── environment.yml           # Conda environment (for local dev / SOL)
 ```
@@ -41,59 +38,12 @@ smolvla-moh-project/
 
 ### Prerequisites
 - Git
-- Homebrew (Mac) or Docker (Linux/Windows GPU machine)
-- A Hugging Face account — sign up at huggingface.co
-- A Weights & Biases account — sign up at wandb.ai
-- GitHub account — accept the repo invite from Corinne before starting
-
----
-
-### Mac Setup (no GPU simulation — code writing and review only)
-
-**1. Clone the repo**
-```bash
-git clone https://github.com/cpadar/smolvla-moh-project.git
-cd smolvla-moh-project
-```
-
-**2. Install Miniconda**
-```bash
-brew install --cask miniconda
-conda init zsh
-```
-Close and reopen Terminal after this step.
-
-**3. Create the project environment**
-```bash
-cd ~/smolvla-moh-project
-conda env create -f environment.yml
-conda activate smolvla-moh
-```
-You should see `(smolvla-moh)` at the start of your Terminal prompt.
-
-**4. Install LeRobot and smolVLA**
-```bash
-git clone https://github.com/huggingface/lerobot.git ~/lerobot
-cd ~/lerobot
-pip install -e ".[smolvla]"
-```
-This will take several minutes. A gymnasium version conflict warning will appear at the end — this is expected and documented in Known Issues below.
-
-**5. Set up your environment variables**
-```bash
-cd ~/smolvla-moh-project
-cp .env.example .env
-open -e .env
-```
-Fill in your Hugging Face token and Weights & Biases API key, then save.
-
-**6. Authenticate with Hugging Face**
-```bash
-huggingface-cli login
-```
-Paste your Hugging Face token when prompted.
-
-Your Mac setup is complete. You can write and review code, push and pull from GitHub, but full simulation and training must run on the GPU machine or SOL.
+- A Hugging Face account
+- A Weights & Biases account
+- GitHub account
+- GPU for simulation
+- Google Colab access for fine-tuning SmolVLA
+- Supercomputer access for fine-tuning SmolVLA+MOH
 
 ---
 
@@ -105,78 +55,54 @@ git clone https://github.com/cpadar/smolvla-moh-project.git
 cd smolvla-moh-project
 ```
 
-**2. Install Docker**
-Download and install Docker Desktop from docker.com. Make sure it is running before continuing.
-
-**3. Build the Docker image**
+**2. Create the project environment**
 ```bash
-docker build -t smolvla-moh -f docker/Dockerfile .
+cd ~/smolvla-moh-project
+conda env create -f environment.yml
+conda activate smolvla-moh
 ```
-This will take 10-20 minutes the first time.
+You should see `(smolvla-moh)` at the start of your Terminal prompt.
 
-**4. Set up your environment variables**
+**3. Install LeRobot and smolVLA**
 ```bash
-cp .env.example .env
-```
-Open `.env` in any text editor and fill in your Hugging Face token and Weights & Biases API key.
-
-**5. Run the container**
-```bash
-docker run --gpus all -it --rm \
-  -v $(pwd):/workspace \
-  -v ~/.cache/huggingface:/root/.cache/huggingface \
-  smolvla-moh
+git clone https://github.com/huggingface/lerobot.git ~/lerobot
+cd ~/lerobot
+pip install -e ".[smolvla]"
 ```
 
 ---
 
 ### SOL Setup (ASU Supercomputer)
 
-**1. Get a SOL account**
-Request access through ASU Research Computing if you don't have one already.
-Contact HPC support to confirm the GPU partition name and that Singularity/Apptainer is available.
-
-**2. Clone the repo on SOL**
+**1. Clone the repo on SOL**
 ```bash
 git clone https://github.com/cpadar/smolvla-moh-project.git
 cd smolvla-moh-project
 ```
 
-**3. Set up your environment variables**
+**2. Create the project environment**
 ```bash
-cp .env.example .env
-nano .env
+cd ~/smolvla-moh-project
+conda env create -f environment.yml
+conda activate smolvla-moh
 ```
-Fill in your tokens and set `MS_ASSET_DIR` to your SOL scratch storage path.
+You should see `(smolvla-moh)` at the start of your Terminal prompt.
 
-**4. Convert Docker image to Singularity**
-```bash
-singularity pull smolvla-moh.sif docker://your-dockerhub-username/smolvla-moh:latest
-```
-
-**5. Submit training jobs**
+**3. Submit training jobs**
 ```bash
 sbatch scripts/slurm/train_base.slurm
 sbatch scripts/slurm/train_moh.slurm
 ```
 
 ---
+## Model Fine-tuning 
+SmolVLA can be fine-tuned on Google Colab notebook. See link to documentation on how to setup training. 
+https://huggingface.co/docs/lerobot/smolvla#finetune-smolvla-on-your-data
 
-## Team Workflow
+To ensure fair training between models SmolVLA+MOH was fine-tuned on ASU SOL due to Google Colab limitations for the bigger model. 
 
-1. Always pull before starting work: `git pull`
-2. Work on feature branches, not directly on `main`
-3. Training runs are tracked via Weights & Biases — check the dashboard before launching duplicate runs
-4. Eval results go in `results/` with a timestamp and config name
-5. Never commit raw data or model checkpoints — these live on SOL and HuggingFace Hub
-6. Never commit your `.env` file — it contains private tokens
-
----
 
 ## Known Issues
 
 **Gymnasium version conflict**
-ManiSkill3 requires `gymnasium==0.29.1` but LeRobot installs `gymnasium==1.2.3`. A warning about this appears during LeRobot installation. This is a known conflict and is handled in the Dockerfile for GPU training. It does not affect local Mac development.
-
-**SAPIEN Mac wheel**
-SAPIEN nightly wheels for Mac rotate frequently and URLs go stale. Since Mac cannot run GPU simulation regardless, this install is skipped for Mac users. Linux machines use SAPIEN through the Docker container automatically.
+ManiSkill3 requires `gymnasium==0.29.1` but LeRobot installs `gymnasium==1.2.3`. A warning about this appears during LeRobot installation.
