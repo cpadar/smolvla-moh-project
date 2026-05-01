@@ -16,7 +16,7 @@ Comparing baseline SmolVLA against SmolVLA augmented with Mixture of Horizons (M
 ### Datasets
 | Dataset | HuggingFace | Description |
 |---------|-------------|-------------|
-| Training data | [`ceshank01/stack-pyramid-v1-v2`](https://huggingface.co/datasets/ceshank01/stack-pyramid-v1-v2) | 998 episodes, 128x128 RGBD |
+| Training data | [`ceshank01/stack-pyramid-v1-v4`](https://huggingface.co/datasets/ceshank01/stack-pyramid-v1-v4) | 998 episodes, 128x128 RGBD |
  
 ---
  
