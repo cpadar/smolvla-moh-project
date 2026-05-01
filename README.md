@@ -1,108 +1,111 @@
-# SmolVLA + Mixture of Horizons — StackPyramid-v1
-
-A research project comparing baseline SmolVLA against SmolVLA augmented with
-Mixture of Horizons (MoH) action chunking on the ManiSkill3 `StackPyramid-v1` task.
-
-## Project Overview
-
-| | Baseline | MoH |
-|---|---|---|
-| Model | SmolVLA (450M) | SmolVLA + Mixture of Horizons |
-| Task | StackPyramid-v1 | StackPyramid-v1 |
-| Training data | ManiSkill3 dataset | same |
-| Eval | Randomized cube positions (fixed seeds) | same seeds |
-
-## Repo Structure
-
-```
-smolvla-moh-project/
-├── configs/                  # YAML configs for training and eval runs
-│   ├── train_base.yaml
-│   ├── train_moh.yaml
-│   └── eval.yaml
-├── data/                     # Data loading utilities (not raw data)
-│   └── maniskill_dataset.py
-├── models/
-│   ├── smolvla_base/         # Fine-tuning wrapper for baseline SmolVLA
-│   └── smolvla_moh/          # SmolVLA + MoH modifications
-├── scripts/
-│   ├── train/                # Training entry points
-│   ├── eval/                 # Evaluation entry points
-│   └── slurm/                # SLURM batch scripts for SOL supercomputer
-├── notebooks/                # Google Colab Notebook for SmolVLA fine-tuning
-├── results/                  # Eval output logs and plots (gitignored except structure)
-└── environment.yml           # Conda environment (for local dev / SOL)
-```
-
-## Quickstart
-
-### Prerequisites
-- Git
-- A Hugging Face account
-- A Weights & Biases account
-- GitHub account
-- GPU for simulation
-- Google Colab access for fine-tuning SmolVLA
-- Supercomputer access for fine-tuning SmolVLA+MOH
-
+# SmolVLA + Mixture of Horizons on StackPyramid-v1
+ 
+**EEE 598 Spring 2026 — Final Project**
+Comparing baseline SmolVLA against SmolVLA augmented with Mixture of Horizons (MoH) action chunking on the ManiSkill3 `StackPyramid-v1` manipulation task.
+ 
 ---
-
-### Linux / Windows GPU Machine Setup
-
-**1. Clone the repo**
+ 
+## Models & Datasets
+ 
+### Trained Checkpoints
+| Model | HuggingFace | Description |
+|-------|-------------|-------------|
+| Baseline SmolVLA | [`ceshank01/smolvla-base-stackpyramid-v4`](https://huggingface.co/ceshank01/smolvla-base-stackpyramid-v4) | 128x128, 20K steps, best baseline |
+| SmolVLA + MoH | [`ceshank01/smolvla-moh-stackpyramid-v6`](https://huggingface.co/ceshank01/smolvla-moh-stackpyramid-v6) | 128x128, 20K steps, horizons [10,25,50] |
+ 
+### Datasets
+| Dataset | HuggingFace | Description |
+|---------|-------------|-------------|
+| Training data | [`ceshank01/stack-pyramid-v1-v2`](https://huggingface.co/datasets/ceshank01/stack-pyramid-v1-v2) | 998 episodes, 128x128 RGBD |
+ 
+---
+ 
+## Environment Setup
+ 
+### Prerequisites
+- Linux machine with NVIDIA GPU (tested on RTX 5070 Ti, A100)
+- Conda
+- CUDA 12+
+### Installation
+ 
 ```bash
+# 1. Clone this repo
 git clone https://github.com/cpadar/smolvla-moh-project.git
 cd smolvla-moh-project
-```
-
-**2. Create the project environment**
-```bash
-cd ~/smolvla-moh-project
+ 
+# 2. Create conda environment
 conda env create -f environment.yml
 conda activate smolvla-moh
-```
-You should see `(smolvla-moh)` at the start of your Terminal prompt.
-
-**3. Install LeRobot and smolVLA**
-```bash
+ 
+# 3. Install LeRobot with SmolVLA support
 git clone https://github.com/huggingface/lerobot.git ~/lerobot
 cd ~/lerobot
 pip install -e ".[smolvla]"
+ 
+# 4. Patch LeRobot to support smolvla_moh policy type
+cd ~/smolvla-moh-project
+python scripts/slurm/patch_factory.py
 ```
-
+ 
 ---
-
-### SOL Setup (ASU Supercomputer)
-
-**1. Clone the repo on SOL**
-```bash
-git clone https://github.com/cpadar/smolvla-moh-project.git
-cd smolvla-moh-project
-```
-
-**2. Create the project environment**
+ 
+## Reproducing Evaluation Results
+ 
+### Evaluate Baseline SmolVLA
+ 
 ```bash
 cd ~/smolvla-moh-project
-conda env create -f environment.yml
 conda activate smolvla-moh
+ 
+python scripts/eval/eval_policy.py \
+  --model ceshank01/smolvla-base-stackpyramid-v4 \
+  --model-type base \
+  --num-episodes 50 \
+  --save-video \
+  --video-dir results/eval_baseline
 ```
-You should see `(smolvla-moh)` at the start of your Terminal prompt.
-
-**3. Submit training jobs**
+ 
+### Evaluate SmolVLA + MoH
+ 
 ```bash
-sbatch scripts/slurm/train_base.slurm
-sbatch scripts/slurm/train_moh.slurm
+python scripts/eval/eval_policy.py \
+  --model ceshank01/smolvla-moh-stackpyramid-v6 \
+  --model-type moh \
+  --num-episodes 50 \
+  --save-video \
+  --video-dir results/eval_moh
+```
+ 
+### Watch Videos
+ 
+```bash
+# Watch a specific episode
+mpv --speed=0.75 results/eval_baseline/base_ep000_fail.mp4
+mpv --speed=0.75 results/eval_baseline/base_ep000_success.mp4
+
+---
+
+## Reproducing Training
+ 
+### Baseline SmolVLA (Google Colab)
+ 
+Open the Colab notebook: **[SmolVLA Baseline Training](YOUR_COLAB_LINK_HERE)**
+ 
+### SmolVLA+MoH (ASU SOL)
+ 
+```bash
+conda activate smolvla-moh
+cd ~/smolvla-moh-project
+git pull
+sbatch scripts/slurm/train_moh_full.sh
+squeue -u $USER
 ```
 
 ---
-## Model Fine-tuning 
-SmolVLA can be fine-tuned on Google Colab notebook. See link to documentation on how to setup training. 
-https://huggingface.co/docs/lerobot/smolvla#finetune-smolvla-on-your-data
-
-To ensure fair training between models SmolVLA+MOH was fine-tuned on ASU SOL due to Google Colab limitations for the bigger model. 
-
-
-## Known Issues
-
-**Gymnasium version conflict**
-ManiSkill3 requires `gymnasium==0.29.1` but LeRobot installs `gymnasium==1.2.3`. A warning about this appears during LeRobot installation.
+ 
+## References
+ 
+- [Mixture of Horizons in Action Chunking](https://arxiv.org/abs/2511.19433) — Jing et al., 2025
+- [SmolVLA](https://huggingface.co/docs/lerobot/smolvla) — HuggingFace LeRobot
+- [ManiSkill3](https://maniskill.ai/) — Simulation environment
+- [LeRobot](https://github.com/huggingface/lerobot) — Training framework
