@@ -11,7 +11,7 @@ Comparing baseline SmolVLA against SmolVLA augmented with Mixture of Horizons (M
 | Model | HuggingFace | Description |
 |-------|-------------|-------------|
 | Baseline SmolVLA | [`ceshank01/smolvla-base-stackpyramid-v4`](https://huggingface.co/ceshank01/smolvla-base-stackpyramid-v4) | 128x128, 20K steps, best baseline |
-| SmolVLA + MoH | [`ceshank01/smolvla-moh-stackpyramid-v6`](https://huggingface.co/ceshank01/smolvla-moh-stackpyramid-v5) | 128x128, 20K steps, horizons [10,25,50] |
+| SmolVLA + MoH | [`ceshank01/smolvla-moh-stackpyramid-v5`](https://huggingface.co/ceshank01/smolvla-moh-stackpyramid-v5) | 128x128, 20K steps, horizons [10,25,50] |
  
 ### Datasets
 | Dataset | HuggingFace | Description |
