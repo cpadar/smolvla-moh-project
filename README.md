@@ -3,7 +3,7 @@
 **EEE 598 Spring 2026 — Final Project**
 Comparing baseline SmolVLA against SmolVLA augmented with Mixture of Horizons (MoH) action chunking on the ManiSkill3 `StackPyramid-v1` manipulation task.
 
-![Demo](smolvla-moh-project/assets/base_ep046_success.gif)
+![Demo](asset/base_ep046_success.gif)
  
 ---
  
