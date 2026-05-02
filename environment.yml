@@ -27,7 +27,7 @@ dependencies:
     - mani_skill
 
     # LeRobot + SmolVLA
-    # After creating env, run: cd /opt/lerobot && pip install -e ".[smolvla]"
+    # After creating env, run: cd ~/lerobot && pip install -e ".[smolvla]"
     # See README for full setup instructions
 
     # Training utilities
