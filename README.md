@@ -16,7 +16,8 @@ Comparing baseline SmolVLA against SmolVLA augmented with Mixture of Horizons (M
 ### Datasets
 | Dataset | HuggingFace | Description |
 |---------|-------------|-------------|
-| Training data | [`ceshank01/stack-pyramid-v1-v4`](https://huggingface.co/datasets/ceshank01/stack-pyramid-v1-v4) | 998 episodes, 128x128 RGBD |
+| Training data | [`ceshank01/stack-pyramid-v1-v2`](https://huggingface.co/datasets/ceshank01/stack-pyramid-v1-v2) | 998 episodes, 128x128 RGBD "Pick" |
+| Training data | [`ceshank01/stack-pyramid-v1-v5`](https://huggingface.co/datasets/ceshank01/stack-pyramid-v1-v5) | 998 episodes, 128x128 RGBD "Push" |
  
 ---
  
@@ -82,14 +83,15 @@ python scripts/eval/eval_policy.py \
 # Watch a specific episode
 mpv --speed=0.75 results/eval_baseline/base_ep000_fail.mp4
 mpv --speed=0.75 results/eval_baseline/base_ep000_success.mp4
-
+```
 ---
 
 ## Reproducing Training
  
 ### Baseline SmolVLA (Google Colab)
  
-Open the Colab notebook: **[SmolVLA Baseline Training](YOUR_COLAB_LINK_HERE)**
+Open the Colab notebook: **[SmolVLA Baseline Training](https://colab.research.google.com/drive/18pFyyaDVkg5E_SAB-Sd0XsmQOJsBHRWd?usp=sharing)**
+This is view only, make a copy and update username info to use
  
 ### SmolVLA+MoH (ASU SOL)
  
